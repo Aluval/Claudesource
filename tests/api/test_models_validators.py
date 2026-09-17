@@ -126,3 +126,27 @@ def test_messages_request_accepts_redacted_thinking_blocks():
         "type": "redacted_thinking",
         "data": "opaque",
     }
+
+
+def test_messages_request_accepts_inline_system_roles():
+    request = MessagesRequest.model_validate(
+        {
+            "model": "claude-3-opus",
+            "max_tokens": 100,
+            "messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "system", "content": "workspace context"},
+                {"role": "assistant", "content": "ok"},
+                {"role": "system", "content": [{"type": "text", "text": "more"}]},
+                {"role": "user", "content": "continue"},
+            ],
+        }
+    )
+
+    assert [msg.role for msg in request.messages] == [
+        "user",
+        "system",
+        "assistant",
+        "system",
+        "user",
+    ]

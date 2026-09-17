@@ -88,6 +88,24 @@ def test_create_message_stream(client: TestClient):
     assert b"message_start" in content or b"event:" in content
 
 
+def test_create_message_accepts_inline_system_roles(client: TestClient):
+    payload = {
+        "model": "claude-3-sonnet",
+        "max_tokens": 100,
+        "stream": True,
+        "messages": [
+            {"role": "user", "content": "hello"},
+            {"role": "system", "content": "workspace context"},
+            {"role": "assistant", "content": "ok"},
+            {"role": "user", "content": "ignored"},
+            {"role": "system", "content": [{"type": "text", "text": "more"}]},
+            {"role": "user", "content": "continue"},
+        ],
+    }
+    response = client.post("/v1/messages", json=payload)
+    assert response.status_code == 200
+
+
 def test_model_mapping(client: TestClient):
     # Test Haiku mapping
     _stream_response_calls.clear()

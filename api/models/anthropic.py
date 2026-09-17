@@ -58,7 +58,9 @@ class SystemContent(BaseModel):
 # Message Types
 # =============================================================================
 class Message(BaseModel):
-    role: Literal["user", "assistant"]
+    # Claude Code's VS Code client injects in-conversation system turns
+    # (Anthropic's public schema only documents user/assistant here).
+    role: Literal["user", "assistant", "system"]
     content: (
         str
         | list[

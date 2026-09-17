@@ -1,5 +1,6 @@
 """Request builder for NVIDIA NIM provider."""
 
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -7,6 +8,12 @@ from loguru import logger
 
 from config.nim import NimSettings
 from core.anthropic import build_base_request_body, set_if_not_none
+
+_IMMUTABLE_SAMPLING_RE = re.compile(
+    r"(?P<name>top_p|temperature|top_k|presence_penalty|frequency_penalty)"
+    r" is immutable for this model and must be (?P<value>-?\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
 
 
 def _set_extra(
@@ -59,6 +66,45 @@ def clone_body_without_chat_template(body: dict[str, Any]) -> dict[str, Any] | N
     if not extra_body:
         cloned_body.pop("extra_body", None)
 
+    return cloned_body
+
+
+def apply_known_model_sampling_overrides(body: dict[str, Any]) -> None:
+    """Force sampling values NVIDIA pins on hosted models.
+
+    Claude Code often sends ``top_p=1``. Kimi rejects that with HTTP 400 and
+    requires ``0.95``. GLM accepts ``0.95``, so it is safe for all NIM models.
+    """
+    body["top_p"] = 0.95
+    extra_body = body.get("extra_body")
+    if isinstance(extra_body, dict) and "top_p" in extra_body:
+        extra_body["top_p"] = 0.95
+
+
+def clone_body_with_immutable_sampling(
+    body: dict[str, Any], error_text: str
+) -> dict[str, Any] | None:
+    """Clone a request body with the sampling value NVIDIA says is required."""
+    match = _IMMUTABLE_SAMPLING_RE.search(error_text)
+    if match is None:
+        return None
+
+    name = match.group("name").lower()
+    raw_value = match.group("value")
+    required: int | float = int(raw_value) if name == "top_k" else float(raw_value)
+    current = body.get(name)
+    if current is not None:
+        try:
+            if float(current) == float(required):
+                return None
+        except (TypeError, ValueError):
+            pass
+
+    cloned_body = deepcopy(body)
+    cloned_body[name] = required
+    extra_body = cloned_body.get("extra_body")
+    if isinstance(extra_body, dict) and name in extra_body:
+        extra_body[name] = required
     return cloned_body
 
 
@@ -130,6 +176,8 @@ def build_request_body(
 
     if extra_body:
         body["extra_body"] = extra_body
+
+    apply_known_model_sampling_overrides(body)
 
     logger.debug(
         "NIM_REQUEST: conversion done model={} msgs={} tools={}",

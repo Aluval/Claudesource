@@ -3,7 +3,7 @@
 import json
 from typing import Any
 
-from .content import get_block_attr, get_block_type
+from .content import extract_text_from_content, get_block_attr, get_block_type
 from .utils import set_if_not_none
 
 
@@ -49,6 +49,10 @@ class AnthropicToOpenAIConverter:
                     result.extend(
                         AnthropicToOpenAIConverter._convert_user_message(content)
                     )
+                elif role == "system":
+                    text = extract_text_from_content(content)
+                    if text:
+                        result.append({"role": "system", "content": text})
             else:
                 result.append({"role": role, "content": str(content)})
 
