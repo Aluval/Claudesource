@@ -80,6 +80,17 @@ class AnthropicMessagesTransport(BaseProvider):
         if "max_tokens" not in body:
             body["max_tokens"] = ANTHROPIC_DEFAULT_MAX_TOKENS
 
+        # Native Anthropic endpoints reject role=system inside messages.
+        # Claude Code (VS Code) still sends those turns; keep order as user.
+        messages = body.get("messages")
+        if isinstance(messages, list):
+            body["messages"] = [
+                {**msg, "role": "user"}
+                if isinstance(msg, dict) and msg.get("role") == "system"
+                else msg
+                for msg in messages
+            ]
+
         return body
 
     async def _send_stream_request(self, body: dict) -> httpx.Response:

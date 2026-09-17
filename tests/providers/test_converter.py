@@ -127,6 +127,25 @@ def test_convert_user_message_str():
     assert result[0] == {"role": "user", "content": "Hello world"}
 
 
+def test_convert_inline_system_messages_preserve_order():
+    messages = [
+        MockMessage("user", "hello"),
+        MockMessage("system", "workspace context"),
+        MockMessage(
+            "system",
+            [MockBlock(type="text", text="more context")],
+        ),
+        MockMessage("user", "continue"),
+    ]
+    result = AnthropicToOpenAIConverter.convert_messages(messages)
+    assert result == [
+        {"role": "user", "content": "hello"},
+        {"role": "system", "content": "workspace context"},
+        {"role": "system", "content": "more context"},
+        {"role": "user", "content": "continue"},
+    ]
+
+
 def test_convert_user_message_list_text():
     content = [
         MockBlock(type="text", text="Hello"),

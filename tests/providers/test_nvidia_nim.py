@@ -437,6 +437,39 @@ async def test_stream_response_retries_without_reasoning_budget(nim_provider):
 
 
 @pytest.mark.asyncio
+async def test_stream_response_retries_with_immutable_temperature(nim_provider):
+    req = MockRequest()
+
+    mock_chunk = MagicMock()
+    mock_chunk.choices = [
+        MagicMock(
+            delta=MagicMock(content="Recovered", reasoning_content=""),
+            finish_reason="stop",
+        )
+    ]
+    mock_chunk.usage = MagicMock(completion_tokens=5)
+
+    async def mock_stream():
+        yield mock_chunk
+
+    error = _make_bad_request_error(
+        "Validation: temperature is immutable for this model and must be 0.6, got 0.5"
+    )
+
+    with patch.object(
+        nim_provider._client.chat.completions, "create", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = [error, mock_stream()]
+
+        events = [e async for e in nim_provider.stream_response(req)]
+
+    assert mock_create.await_count == 2
+    assert mock_create.await_args_list[0].kwargs["temperature"] == 0.5
+    assert mock_create.await_args_list[1].kwargs["temperature"] == 0.6
+    assert any("Recovered" in event for event in events)
+
+
+@pytest.mark.asyncio
 async def test_stream_response_bad_request_without_reasoning_budget_does_not_retry(
     nim_provider,
 ):

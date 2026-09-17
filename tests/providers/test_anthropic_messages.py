@@ -143,6 +143,32 @@ def test_default_request_body_preserves_thinking_budget(provider_config):
     assert body["thinking"] == {"type": "enabled", "budget_tokens": 4096}
 
 
+def test_inline_system_messages_are_rewritten_to_user(provider_config):
+    provider = NativeProvider(provider_config)
+    req = MockRequest(
+        body={
+            "model": "test-model",
+            "messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "system", "content": "workspace context"},
+                {"role": "assistant", "content": "ok"},
+                {"role": "system", "content": [{"type": "text", "text": "more"}]},
+            ],
+        }
+    )
+
+    body = provider._build_request_body(req)
+
+    assert [msg["role"] for msg in body["messages"]] == [
+        "user",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert body["messages"][1]["content"] == "workspace context"
+    assert body["messages"][3]["content"] == [{"type": "text", "text": "more"}]
+
+
 @pytest.mark.asyncio
 async def test_stream_uses_retry_builds_request_and_closes_response(
     provider_config,

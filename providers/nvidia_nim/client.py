@@ -13,6 +13,7 @@ from providers.openai_compat import OpenAIChatTransport
 
 from .request import (
     build_request_body,
+    clone_body_with_immutable_sampling,
     clone_body_without_chat_template,
     clone_body_without_reasoning_budget,
 )
@@ -64,6 +65,13 @@ class NvidiaNimProvider(OpenAIChatTransport):
             if retry_body is None:
                 return None
             logger.warning("NIM_STREAM: retrying without chat_template after 400 error")
+            return retry_body
+
+        retry_body = clone_body_with_immutable_sampling(body, error_text)
+        if retry_body is not None:
+            logger.warning(
+                "NIM_STREAM: retrying with NVIDIA-required sampling after 400 error"
+            )
             return retry_body
 
         return None

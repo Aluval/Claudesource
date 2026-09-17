@@ -9,6 +9,7 @@ from core.anthropic import set_if_not_none
 from providers.nvidia_nim.request import (
     _set_extra,
     build_request_body,
+    clone_body_with_immutable_sampling,
     clone_body_without_chat_template,
 )
 
@@ -253,3 +254,35 @@ class TestBuildRequestBody:
         body = build_request_body(req, NimSettings(), thinking_enabled=False)
         assert "<think>" not in body["messages"][0]["content"]
         assert "answer" in body["messages"][0]["content"]
+
+    def test_kimi_forces_required_top_p(self, req):
+        req.model = "moonshotai/kimi-k3"
+        req.top_p = 1.0
+        body = build_request_body(req, NimSettings(), thinking_enabled=False)
+        assert body["top_p"] == 0.95
+
+    def test_glm_clamps_top_p_one_to_nvidia_safe_value(self, req):
+        req.model = "z-ai/glm-5.3"
+        req.top_p = 1.0
+        body = build_request_body(req, NimSettings(), thinking_enabled=False)
+        assert body["top_p"] == 0.95
+
+
+def test_clone_body_with_immutable_top_p():
+    cloned = clone_body_with_immutable_sampling(
+        {"model": "moonshotai/kimi-k3", "top_p": 1},
+        "Validation: top_p is immutable for this model and must be 0.95, got 1",
+    )
+    assert cloned is not None
+    assert cloned["top_p"] == 0.95
+    assert cloned["model"] == "moonshotai/kimi-k3"
+
+
+def test_clone_body_with_immutable_sampling_skips_when_already_set():
+    assert (
+        clone_body_with_immutable_sampling(
+            {"top_p": 0.95},
+            "top_p is immutable for this model and must be 0.95, got 1",
+        )
+        is None
+    )
